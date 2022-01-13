@@ -5,9 +5,13 @@ if pgrep -x "$SERVICE" >/dev/null
 then
     logger "$SERVICE is already running"
 else
+    LastUploadFilePath="./LastUploadFileInfo.txt"
+
     for SourceFilePath in "./files"/*.json
     do
         [ -f "$SourceFilePath" ] || continue
+
+        rm -f $LastUploadFilePath
 
         logger "upload start $SourceFilePath"
 
@@ -21,21 +25,25 @@ else
         set net:timeout 10;set net:max-retries 1;set net:reconnect-interval-multiplier 1;set net:reconnect-interval-base 1;\
         set xfer:log-file /honglim/sftp-xfer.log;\
         set log:file /honglim/sftp-proto.log;\
-        put -e ${SourceFilePath};\
-        ls | grep ${SourceFileName} | xargs > UploadedFileInfo.txt
+        put -c ${SourceFilePath};\
+        ls | grep ${SourceFileName} | xargs > ${LastUploadFilePath}
         bye'"
 
         eval "$SFTPCMD"
         result=$?
 
         if [ $result -eq 0 ]; then
-            UploadedFileSize=$(cat ./UploadedFileInfo.txt | awk '{print $5}')
-            logger "UploadedFileSize  is $UploadedFileSize"
-            if [ "$UploadedFileSize" = "$SourceFileSize" ]; then
-                logger "upload success & delete file :${SourceFilePath}"
-                rm -rf $SourceFilePath
+            if [ -f "$LastUploadFilePath" ]; then
+                UploadedFileSize=$(cat $LastUploadFilePath | awk '{print $5}')
+                logger "UploadedFileSize  is $UploadedFileSize"                  
+                if [ "$UploadedFileSize" = "$SourceFileSize" ]; then             
+                    logger "upload success & delete file :${SourceFilePath}"     
+                    rm -rf $SourceFilePath                                       
+                else                                                             
+                    logger "UploadedFileSize  error"                             
+                fi 
             else
-                logger "UploadedFileSize  error"
+                logger "Create fail $LastUploadFilePath" 
             fi
         else
             logger "upload fail :${SourceFilePath}"
